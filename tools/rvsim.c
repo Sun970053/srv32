@@ -69,6 +69,9 @@ int mem_size = 256*1024; // default memory size
     if (!mtime_update) csr.mtime.c = csr.mtime.c + count; \
 }
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 // processor status
 CSR csr;
 int32_t pc = 0;
@@ -87,6 +90,10 @@ struct timeval time_end;
 int *mem;
 int *imem;
 int *dmem;
+
+// "A" extension
+int reserve_valid = 0;
+unsigned int reserve_set;
 
 #ifdef RV32C_ENABLED
 int overhead = 0;
@@ -1635,6 +1642,88 @@ int main(int argc, char **argv) {
                 TRACE_LOG " x%02u (%s) <= 0x%08x\n",
                           inst.i.rd,
                           regname[inst.i.rd], REGS(inst.i.rd) TRACE_END;
+            }
+            break;
+        }
+        case OP_AMO: {
+            switch (inst.r.func3){
+                case FN_RV32A:
+                    TIME_LOG; TRACE_LOG "%08x %08x\n", pc, inst.inst TRACE_END;
+                    int32_t data;
+                    int32_t address = REGS(inst.r.rs1);
+                    // Data memory
+                    if (address >= DMEM_BASE && address < DMEM_BASE+DMEM_SIZE) {
+                        data = dmem[DVA2PA(address)/4];
+                    }
+                    else{
+                        printf("Unknown address 0x%08x to read at PC 0x%08x\n",
+                           address, pc);
+                        TRACE_LOG "\n" TRACE_END;
+                        TRAP(TRAP_LD_FAIL, address);
+                        continue;
+                    }
+                    if (singleram) CYCLE_ADD(1);
+                    switch(inst.r.func7 >> 2){
+                        case OP_LR:
+                            REGS_W(inst.r.rd, data);
+                            reserve_set = address;
+                            reserve_valid = 1;
+                            break;
+                        case OP_SC:
+                            if(reserve_valid && reserve_set == address){
+                                dmem[DVA2PA(address)/4] = REGS(inst.r.rs2);
+                                REGS(inst.r.rd) = 0;
+                            }
+                            else{
+                                REGS(inst.r.rd) = 1;
+                            }
+                            reserve_set = 0;
+                            break;
+                        case OP_AMOSWAP:
+                            REGS_W(inst.r.rd, data);
+                            dmem[DVA2PA(address)/4] = REGS(inst.r.rs2);
+                            break;
+                        case OP_AMOADD:
+                            REGS_W(inst.r.rd, data + REGS(inst.r.rs2));
+                            dmem[DVA2PA(address)/4] += REGS(inst.r.rs2);
+                            break;
+                        case OP_AMOAND:
+                            REGS_W(inst.r.rd, data & REGS(inst.r.rs2));
+                            dmem[DVA2PA(address)/4] &= REGS(inst.r.rs2);
+                            break;
+                        case OP_AMOOR:
+                            REGS_W(inst.r.rd, data | REGS(inst.r.rs2));
+                            dmem[DVA2PA(address)/4] |= REGS(inst.r.rs2);
+                            break;
+                        case OP_AMOXOR:
+                            REGS_W(inst.r.rd, data ^ REGS(inst.r.rs2));
+                            dmem[DVA2PA(address)/4] ^= REGS(inst.r.rs2);
+                            break;
+                        case OP_AMOMAX:
+                            REGS_W(inst.r.rd, MAX(data, REGS(inst.r.rs2)));
+                            dmem[DVA2PA(address/4)] = MAX(data, REGS(inst.r.rs2));
+                            break;
+                        case OP_AMOMIN:
+                            REGS_W(inst.r.rd, MIN(data, REGS(inst.r.rs2)));
+                            dmem[DVA2PA(address/4)] = MIN(data, REGS(inst.r.rs2));
+                            break;
+                        case OP_AMOMAXU:
+                            REGS_W(inst.r.rd, MIN((unsigned int)data, (unsigned int)REGS(inst.r.rs2)));
+                            dmem[DVA2PA(address/4)] = MIN((unsigned int)data, (unsigned int)REGS(inst.r.rs2));
+                            break;
+                        case OP_AMOMINU:
+                            REGS_W(inst.r.rd, MIN((unsigned int)data, (unsigned int)REGS(inst.r.rs2)));
+                            dmem[DVA2PA(address/4)] = MIN((unsigned int)data, (unsigned int)REGS(inst.r.rs2));
+                            break;
+                        default:
+                            printf("Unknown instruction at PC 0x%08x\n", pc);
+                            TRAP(TRAP_INST_ILL, inst.inst);
+                            continue;
+                    }
+                default:
+                    printf("Unknown instruction at PC 0x%08x\n", pc);
+                    TRAP(TRAP_INST_ILL, inst.inst);
+                    continue;
             }
             break;
         }

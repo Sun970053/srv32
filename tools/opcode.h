@@ -208,7 +208,8 @@ enum {
     OP_ARITHI  = 0x13,         // I-type
     OP_ARITHR  = 0x33,         // R-type
     OP_FENCE   = 0x0f,
-    OP_SYSTEM  = 0x73
+    OP_SYSTEM  = 0x73,
+    OP_AMO     = 0x2F 
 };
 
 enum {
@@ -330,6 +331,26 @@ enum {
     OP_BEXT         = 5,
     OP_ROL          = 1,
     OP_ROR          = 5,
+};
+
+
+enum {
+    FN_RV32A      = 0x02
+};
+
+// constant on inst[31:27](funct5) for A extension
+enum {
+    OP_LR         = 0x02,
+    OP_SC         = 0x03,
+    OP_AMOSWAP    = 0x01,
+    OP_AMOADD     = 0x00,
+    OP_AMOAND     = 0x0c,
+    OP_AMOOR      = 0x0a,
+    OP_AMOXOR     = 0x04,
+    OP_AMOMAX     = 0x14,
+    OP_AMOMIN     = 0x10,
+    OP_AMOMAXU    = 0x18,
+    OP_AMOMINU    = 0x1C
 };
 
 enum {
@@ -532,7 +553,8 @@ typedef struct _CSR {
 #define MHARTID       0
 #define MISA          ((1<<30)|(RV32M<<12)|(1<<8)|(RV32E<<4)|(RV32B<<1))
 
-#define MMIO_PUTC     0xa000001c /* 32-bits */
+//#define MMIO_PUTC     0xa000001c /* 32-bits */
+#define MMIO_PUTC     0x9000001c /* 32-bits */
 #define MMIO_GETC     0xa0000020 /* 32-bits */
 #define MMIO_EXIT     0xa000002c /* 32-bits */
 #define MMIO_TOHOST   0xa0000030 /* 32-bits */
